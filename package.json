@@ -1,0 +1,13 @@
+{
+  "name": "rag-python",
+  "version": "1.0.0",
+  "repository": "https://github.com/bimmerbailey/python-ai-chat.git",
+  "author": "michael <steve_mikebailey@hotamil.com>",
+  "license": "Propietary",
+  "private": true,
+  "dependencies": {
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.4.0"
+  }
+}

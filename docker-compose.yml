@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  
+  server:
+    build:
+      context: ./server
+      target: development
+    environment:
+      - FASTAPI_ENV=dev
+    depends_on:
+      - mongo
+      - redis
+      - milvus-db
+    ports:
+      - "8000:8000"
+    volumes:
+      - "./server/app:/backend/app"
+      - "./server/tests:/backend/tests"
+      - "./server/development:/backend/development"
+  
+  mongo:
+    image: mongo:6.0.5
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: mongod
+      MONGO_INITDB_ROOT_PASSWORD: Password123!
+      MONGO_INITDB_DATABASE: rag_app
+    volumes:
+      - "mongo:/data/db"
+      - "./dev/init-db.js:/docker-entrypoint-initdb.d/init-db.js"
+    expose:
+      - "27017"
+    ports:
+      - "27017:27017"
+    restart: unless-stopped
+  
+  attu:
+    image: docker.io/bitnami/attu:2
+    environment:
+      MILVUS_URL: "http://milvus-db:19530"
+    depends_on: 
+      - milvus-db
+    ports:
+      - "8080:3000"
+  
+  etcd:
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.5
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - "etcd:/etcd"
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  minio:
+    container_name: milvus-minio
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9001:9001"
+      - "9000:9000"
+    volumes:
+      - "milvus-minio:/minio_data"
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  milvus-db:
+    image: milvusdb/milvus:v2.3.3
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+    - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    volumes:
+      - "milvus-db:/var/lib/milvus"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    depends_on:
+      - "etcd"
+      - "minio"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+
+volumes: 
+  milvus-db:
+  milvus-minio:
+  etcd:
+  mongo:
